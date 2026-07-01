@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eSewa Review Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css" as="style"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --esewa-green:#60BB46;
+    --esewa-green-dark:#4a9636;
+    --esewa-green-light:#eaf6e6;
+    --esewa-navy:#1C3F60;
+    --esewa-navy-light:#2c5680;
+    --bg-page:#F4F6F8;
+    --bg-card:#ffffff;
+    --text-main:#1C3F60;
+    --text-soft:#5b7186;
+    --text-faint:#94a3b8;
+    --border-soft:#e3e8ed;
+    --red:#E5484D;
+    --red-light:#fdecec;
+    --amber:#F0A93B;
+    --amber-light:#fdf3e2;
+    --bg-soft:#fbfcfd;
+    --search-bg:rgba(255,255,255,0.95);
+  }
+  :root[data-theme="dark"]{
+    --bg-page:#07131f;
+    --bg-card:#10253a;
+    --text-main:#f6f7fb;
+    --text-soft:#a7bbca;
+    --text-faint:#7691a8;
+    --border-soft:#233c54;
+    --esewa-navy:#0f2236;
+    --esewa-navy-light:#18394f;
+    --bg-soft:#163247;
+    --search-bg:rgba(9,23,37,0.96);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg-page);font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--text-main)}
+  #root{min-height:100vh}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+  ::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+  button{font-family:inherit}
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ============================================================
+// eSewa Review Analytics — Mock Dataset
+// Realistic Google Play Store review data, June 24-25 2026 focus
+// plus long-term trend data (2025 - 2026)
+// ============================================================
+
+const NAMES = [
+  "Rajesh Shrestha","Sunita Maharjan","Bikash Tamang","Anita Gurung","Prakash Thapa",
+  "Sabina KC","Dipesh Rai","Manisha Lama","Sandeep Karki","Pooja Bhattarai",
+  "Nirmal Adhikari","Kabita Shah","Rohit Magar","Sarita Poudel","Bishal Khadka",
+  "Rita Tamang","Suraj Basnet","Anjali Sharma","Deepak Joshi","Sunita Rana",
+  "Arjun Limbu","Manju Pandey","Hari Bahadur","Laxmi Devi","Pemba Sherpa",
+  "Sangita Khatri","Bimal Chaudhary","Rekha Acharya","Ramesh Bista","Nisha Tamrakar"
+];
+
+function pick(arr, seed){ return arr[seed % arr.length]; }
+function dateNPT(daysAgo, hour, minute){
+  const d = new Date("2026-06-25T12:00:00+05:45");
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+function fmt(d){
+  return d.toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true });
+}
+
+// ---------- Categorized review templates ----------
+const TEMPLATES = {
+  mpin: [
+    "MPIN verification keeps failing even after I enter the correct PIN three times in a row.",
+    "App locked me out after one wrong MPIN attempt. Now I can't reset it from the app at all.",
+    "Forgot MPIN option redirects to a blank page. Stuck completely outside my own wallet.",
+    "Biometric login stopped working after the update, forced back to MPIN which also fails.",
+    "MPIN reset OTP never arrives. Tried five times over two hours, no luck.",
+    "Set a new MPIN successfully but the app still asks for the old one on next login.",
+    "Account got locked for 24 hours after MPIN mismatch, no warning given beforehand."
+  ],
+  kyc: [
+    "Submitted my citizenship documents four days ago for KYC, still shows pending with no update.",
+    "KYC verification rejected without any reason. Resubmitted twice, same blank rejection.",
+    "Face match step in eKYC never completes, camera freezes every single time.",
+    "Promised 2-hour KYC approval but mine took 3 days. No way to escalate or check status.",
+    "Document upload says file too large even after compressing to under 1MB.",
+    "KYC support says wait 48 hours, then nothing happens, then no follow up at all.",
+    "Had to redo KYC from scratch after an app update wiped my previous submission."
+  ],
+  otp: [
+    "OTP took over 12 minutes to arrive, by which time the payment session had expired.",
+    "Never received OTP on Ncell number despite multiple resend attempts over an hour.",
+    "OTP arrived but said invalid immediately, support couldn't explain why.",
+    "Login OTP delayed during evening hours every single day this week.",
+    "Tried resending OTP 6 times, each one came 10 minutes late and already expired.",
+    "OTP works fine on WiFi but never arrives when using mobile data.",
+    "Two OTPs arrived back to back, both expired before I could type either one in."
+  ],
+  support: [
+    "Called customer support five times, on hold for 40 minutes each time, no resolution.",
+    "Submitted a complaint ticket a week ago, still no human response, only auto-replies.",
+    "Support chat just loops the same canned message regardless of what I type.",
+    "Asked for refund status, support said check back later, that was three weeks ago.",
+    "No way to reach a live agent, only a chatbot that can't resolve account issues.",
+    "Complaint number was given but checking status online shows no record of it.",
+    "Support told me to email, emailed, got an auto-reply, then complete silence."
+  ],
+  payment: [
+    "Money deducted for mobile recharge but recharge never went through. No refund yet.",
+    "Tried sending money to a friend, transaction failed but balance was deducted instantly.",
+    "QR scan payment shows a black screen at checkout, had to use cash instead at the counter.",
+    "Bank linking fails every time with a generic error code, no real explanation given.",
+    "Payment gateway timed out mid-transaction, money gone, merchant says nothing received.",
+    "Double payment charged for the same electricity bill, refund request pending for days.",
+    "Wallet top-up from bank account failed three times today alone, same error every time."
+  ],
+  performance: [
+    "App takes nearly a minute just to open on my phone, used to be instant before.",
+    "App crashes the moment I tap the scan QR button, happens every time without fail.",
+    "Home screen freezes completely after the latest update, had to force close repeatedly.",
+    "Battery drains noticeably faster ever since I installed the newest version.",
+    "App randomly logs me out mid-transaction, have to start the whole process over.",
+    "Notifications arrive five or six hours late, useless for tracking real-time payments.",
+    "Interface looks broken on my screen size, buttons overlap and text gets cut off."
+  ],
+  positive: [
+    "Honestly works great for daily bus fare and grocery payments, very convenient overall.",
+    "Customer support resolved my issue within an hour this time, much appreciated.",
+    "Love how easy it is to split bills with friends using the request money feature.",
+    "Updated UI looks much cleaner now, finding features is a lot more intuitive.",
+    "KYC went smoothly for me, approved within 2 hours just as promised.",
+    "Reliable for utility bill payments every month, never had an issue with that part.",
+    "Transferring to bank account is fast, usually completes within a few minutes."
+  ],
+  solutionOriented: [
+    "Suggestion: please add an in-app status tracker for KYC so we're not left guessing for days.",
+    "It would help if OTP had a fallback to WhatsApp when SMS delivery is delayed past 2 minutes.",
+    "Please add a manual KYC review queue with priority for users stuck over 24 hours.",
+    "A simple transaction status page where I can check pending/failed/refunded by transaction ID would fix a lot of confusion.",
+    "Recommend adding biometric as default login instead of relying on MPIN entirely, fewer lockouts that way.",
+    "Customer support needs a callback request option instead of forcing 40-minute holds, that alone would help thousands of users.",
+    "If failed transactions auto-reversed within 30 seconds instead of staying pending, half these complaints would disappear.",
+    "Please let us choose an alternate payment method instantly when the QR scanner shows a black screen, instead of failing silently.",
+    "A dedicated escalation form for KYC stuck over 48 hours would save people from repeating the same complaint.",
+    "Push notifications the moment a transaction status changes would remove most of the 'where did my money go' anxiety."
+  ]
+};
+
+function buildReview(id, category, daysAgo, hour, minute, rating, textPool, idx){
+  const d = dateNPT(daysAgo, hour, minute);
+  return {
+    id,
+    name: pick(NAMES, id),
+    date: d,
+    dateLabel: fmt(d),
+    rating,
+    category,
+    platform: "Google Play",
+    text: textPool[idx % textPool.length],
+    helpful: Math.floor((id * 7) % 40)
+  };
+}
+
+// ---------- Build full review set ----------
+let _id = 1;
+const reviews = [];
+
+// June 24-25, 2026 focus window — dense, realistic spread across 48h
+const focusSpecs = [
+  ["mpin", 1, 0, 12, 1], ["kyc", 1, 0, 47, 1], ["payment", 1, 1, 18, 1],
+  ["otp", 1, 2, 5, 1], ["performance", 1, 2, 41, 2], ["support", 1, 3, 9, 1],
+  ["payment", 1, 4, 22, 1], ["positive", 1, 5, 3, 5], ["kyc", 1, 6, 15, 1],
+  ["mpin", 1, 6, 58, 1], ["otp", 1, 7, 31, 2], ["payment", 1, 8, 4, 1],
+  ["performance", 1, 8, 49, 2], ["support", 1, 9, 27, 1], ["positive", 1, 10, 11, 4],
+  ["kyc", 1, 10, 53, 1], ["payment", 1, 11, 6, 1], ["mpin", 1, 12, 0, 1],
+  ["solutionOriented", 1, 12, 38, 3], ["otp", 1, 13, 14, 2], ["payment", 1, 13, 44, 1],
+  ["performance", 1, 14, 21, 2], ["kyc", 1, 14, 59, 1], ["support", 1, 15, 33, 1],
+  ["positive", 1, 16, 7, 5], ["payment", 1, 16, 42, 1], ["mpin", 1, 17, 19, 1],
+  ["solutionOriented", 1, 17, 50, 4], ["otp", 1, 18, 6, 2], ["kyc", 1, 18, 36, 1],
+  ["payment", 1, 19, 13, 1], ["performance", 1, 19, 48, 2], ["support", 1, 20, 24, 1],
+  ["positive", 1, 21, 2, 4], ["payment", 1, 21, 37, 1], ["mpin", 1, 22, 9, 1],
+  ["kyc", 1, 22, 45, 1], ["otp", 1, 23, 17, 2], ["payment", 1, 23, 52, 1],
+
+  ["payment", 0, 0, 8, 1], ["mpin", 0, 0, 39, 1], ["kyc", 0, 1, 14, 1],
+  ["performance", 0, 1, 47, 2], ["support", 0, 2, 22, 1], ["positive", 0, 3, 6, 5],
+  ["payment", 0, 3, 41, 1], ["otp", 0, 4, 16, 2], ["solutionOriented", 0, 4, 50, 3],
+  ["kyc", 0, 5, 28, 1], ["payment", 0, 5, 55, 1], ["mpin", 0, 6, 19, 1],
+  ["performance", 0, 6, 44, 2], ["positive", 0, 7, 12, 4], ["support", 0, 7, 38, 1],
+  ["payment", 0, 8, 7, 1], ["otp", 0, 8, 33, 2], ["kyc", 0, 9, 21, 1],
+  ["solutionOriented", 0, 9, 49, 4], ["mpin", 0, 10, 5, 1], ["payment", 0, 10, 36, 1],
+  ["performance", 0, 11, 14, 2], ["positive", 0, 11, 42, 5], ["support", 0, 12, 8, 1],
+  ["kyc", 0, 12, 31, 1], ["payment", 0, 13, 2, 1], ["otp", 0, 13, 27, 2],
+  ["mpin", 0, 14, 11, 1], ["performance", 0, 14, 46, 2], ["positive", 0, 15, 9, 4],
+  ["payment", 0, 15, 35, 1], ["solutionOriented", 0, 16, 4, 3], ["kyc", 0, 16, 29, 1],
+  ["support", 0, 17, 6, 1], ["payment", 0, 17, 33, 1], ["otp", 0, 18, 12, 2],
+  ["mpin", 0, 18, 41, 1], ["performance", 0, 19, 3, 2], ["positive", 0, 19, 28, 5],
+  ["kyc", 0, 20, 7, 1], ["payment", 0, 20, 34, 1], ["support", 0, 21, 1, 1],
+  ["solutionOriented", 0, 21, 26, 4], ["otp", 0, 22, 9, 2], ["mpin", 0, 22, 37, 1],
+  ["payment", 0, 23, 4, 1], ["performance", 0, 23, 22, 2]
+];
+
+focusSpecs.forEach(([cat, daysAgo, hour, minute, rating], i) => {
+  const pool = TEMPLATES[cat];
+  reviews.push(buildReview(_id++, cat, daysAgo, hour, minute, rating, pool, i));
+});
+
+const focusReviews = reviews.slice();
+
+// ---------- Long-term historical data (synthetic daily aggregates, 2025-01 to 2026-06) ----------
+function buildHistorical(){
+  const days = [];
+  const start = new Date("2025-01-01T00:00:00+05:45");
+  const end = new Date("2026-06-25T00:00:00+05:45");
+  let cur = new Date(start);
+  let i = 0;
+  while (cur <= end) {
+    const month = cur.getMonth();
+    const dayOfWeek = cur.getDay();
+    let base = 40 + Math.sin(i / 14) * 10;
+    if (month === 0 && cur.getFullYear() === 2026) base += 60; // Jan 2026 spike (server outage)
+    if (month === 4 && cur.getDate() >= 20 && cur.getDate() <= 26 && cur.getFullYear() === 2025) base += 45; // May outage
+    if (cur.getFullYear() === 2026 && month === 5 && cur.getDate() >= 23) base += 25; // recent fee backlash
+    const volume = Math.max(8, Math.round(base + (Math.sin(i * 1.7) * 6)));
+    let negPct = 0.30 + Math.sin(i / 20) * 0.08;
+    if (month === 0 && cur.getFullYear() === 2026) negPct = 0.58;
+    if (cur.getFullYear() === 2026 && month === 5 && cur.getDate() >= 23) negPct = 0.5;
+    negPct = Math.min(0.7, Math.max(0.15, negPct));
+    const neuPct = 0.12 + Math.sin(i / 11) * 0.03;
+    const posPct = Math.max(0.1, 1 - negPct - neuPct);
+    days.push({
+      date: new Date(cur),
+      dateLabel: cur.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }),
+      volume,
+      positive: Math.round(volume * posPct),
+      neutral: Math.round(volume * neuPct),
+      negative: Math.round(volume * negPct),
+      avgRating: +(2.2 + (1 - negPct) * 2.8).toFixed(2)
+    });
+    cur.setDate(cur.getDate() + 1);
+    i++;
+  }
+  return days;
+}
+
+const historical = buildHistorical();
+
+function aggregate(period){
+  // period: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  if (period === 'daily') return historical.slice(-30);
+  const map = new Map();
+  historical.forEach(d => {
+    let key;
+    if (period === 'weekly') {
+      const tmp = new Date(d.date);
+      const day = tmp.getDay();
+      tmp.setDate(tmp.getDate() - day);
+      key = tmp.toISOString().slice(0,10);
+    } else if (period === 'monthly') {
+      key = `${d.date.getFullYear()}-${String(d.date.getMonth()+1).padStart(2,'0')}`;
+    } else {
+      key = `${d.date.getFullYear()}`;
+    }
+    if (!map.has(key)) map.set(key, { volume:0, positive:0, neutral:0, negative:0, count:0, ratingSum:0, label:key });
+    const e = map.get(key);
+    e.volume += d.volume; e.positive += d.positive; e.neutral += d.neutral; e.negative += d.negative;
+    e.ratingSum += d.avgRating; e.count += 1;
+  });
+  return Array.from(map.values()).map(e => ({
+    ...e,
+    avgRating: +(e.ratingSum / e.count).toFixed(2),
+    dateLabel: period === 'monthly'
+      ? new Date(e.label + "-01").toLocaleDateString('en-US', { month:'short', year:'2-digit' })
+      : period === 'yearly' ? e.label : e.label
+  }));
+}
+
+// ---------- Category aggregate counts (for sidebar problem statement + dashboards) ----------
+const categoryStats = {
+  mpin: { label: "MPIN issues", count: 312, trend: "+18%", icon: "lock" },
+  kyc: { label: "KYC verification hurdles", count: 487, trend: "+9%", icon: "id-badge" },
+  otp: { label: "OTP delivery delays", count: 268, trend: "+22%", icon: "message-2" },
+  support: { label: "Customer support blockages", count: 401, trend: "+5%", icon: "headset" },
+  payment: { label: "Payment gateway dropouts", count: 893, trend: "+31%", icon: "credit-card-off" },
+  performance: { label: "App performance and bugs", count: 356, trend: "+12%", icon: "bug" }
+};
+
+const reviewAnalysisGroups = {
+  systemFailures: { label: "System failures", count: 524, examples: ["server", "crash", "down", "timeout"] },
+  paymentDropouts: { label: "Payment gateway dropouts", count: 893, examples: ["failed", "deducted", "stuck", "pending"] },
+  uiConfusion: { label: "UI / UX confusion", count: 187, examples: ["confusing", "can't find", "hidden", "unclear"] }
+};
+
+const suggestionGroups = {
+  customerCare: { label: "Customer care upgrades", count: 96 },
+  paymentOptimizations: { label: "Payment process optimizations", count: 134 },
+  infrastructureUpgrades: { label: "System infrastructure upgrades", count: 88 }
+};
+
+// ---------- Overall hero metrics ----------
+const heroMetrics = {
+  appRating: 3.4,
+  totalReviews: 2717,
+  positive: 1538,
+  neutral: 218,
+  negative: 961,
+  ratingTrendDelta: -0.6
+};
+
+// ---------- Payment gateway dashboard specific data ----------
+const paymentGatewayData = {
+  successRate: 78.4,
+  failureRate: 21.6,
+  avgTimeToRefundHours: 36,
+  bankErrors: [
+    { bank: "NIC Asia", errorCode: "ERR_4012", count: 142, desc: "Bank server timeout during linking" },
+    { bank: "Global IME", errorCode: "ERR_2207", count: 118, desc: "Account verification mismatch" },
+    { bank: "Nabil Bank", errorCode: "ERR_5590", count: 97, desc: "Session expired mid-transfer" },
+    { bank: "NMB Bank", errorCode: "ERR_3381", count: 84, desc: "Insufficient gateway response" },
+    { bank: "Prabhu Bank", errorCode: "ERR_1124", count: 61, desc: "OTP mismatch on bank side" }
+  ],
+  volumeTrend: [820, 910, 875, 940, 1020, 980, 1100, 1050, 690, 1180]
+};
+
+// ---------- Failed transactions dashboard ----------
+const failedTransactionsData = {
+  totalFailed: 1247,
+  avgRefundTime: "36 hrs",
+  refundSLA: "Within 24 hrs (promised)",
+  keywordMatches: focusReviews.filter(r => r.category === "payment"),
+  errorLog: [
+    { time: "Jun 25, 02:05 AM", txnId: "TXN-88213X", error: "GATEWAY_TIMEOUT", amount: "Rs 2,450" },
+    { time: "Jun 25, 04:22 AM", txnId: "TXN-88219R", error: "DOUBLE_CHARGE", amount: "Rs 1,200" },
+    { time: "Jun 24, 11:06 PM", txnId: "TXN-88190Q", error: "BANK_DECLINE", amount: "Rs 5,000" },
+    { time: "Jun 24, 08:04 PM", txnId: "TXN-88176M", error: "SESSION_EXPIRED", amount: "Rs 850" },
+    { time: "Jun 24, 03:41 PM", txnId: "TXN-88150J", error: "GATEWAY_TIMEOUT", amount: "Rs 3,300" }
+  ]
+};
+
+// ---------- MPIN dashboard ----------
+const mpinData = {
+  totalIncidents: 312,
+  lockouts: 89,
+  resetFailures: 134,
+  biometricFallbackFails: 47,
+  weeklyTrend: [38, 42, 35, 51, 47, 44, 55]
+};
+
+// ---------- KYC dashboard ----------
+const kycData = {
+  totalIncidents: 487,
+  avgApprovalHours: 31,
+  promisedHours: 2,
+  rejectionReasons: [
+    { reason: "Blurry document photo", pct: 34 },
+    { reason: "Face match failure", pct: 28 },
+    { reason: "Name mismatch with bank", pct: 19 },
+    { reason: "Document expired", pct: 12 },
+    { reason: "File size rejected", pct: 7 }
+  ]
+};
+
+// ---------- OTP dashboard ----------
+const otpData = {
+  totalIncidents: 268,
+  avgDelaySeconds: 287,
+  timeoutRate: 41,
+  carrierBreakdown: [
+    { carrier: "Ntc", avgDelaySec: 312, failRate: 38 },
+    { carrier: "Ncell", avgDelaySec: 254, failRate: 33 },
+    { carrier: "Smart Cell", avgDelaySec: 298, failRate: 44 }
+  ]
+};
+
+// ---------- Customer Support dashboard ----------
+const supportData = {
+  totalIncidents: 401,
+  avgHoldTimeMin: 38,
+  satisfactionScore: 2.1,
+  channelPrefs: [
+    { channel: "Phone call", pct: 46 },
+    { channel: "In-app chat", pct: 33 },
+    { channel: "Email", pct: 15 },
+    { channel: "Social media", pct: 6 }
+  ]
+};
+
+// ---------- Solution-oriented reviews ----------
+const solutionReviews = focusReviews.filter(r => r.category === "solutionOriented");
+
+window.ESEWA_DATA = {
+  reviews, focusReviews, historical, aggregate, categoryStats,
+  reviewAnalysisGroups, suggestionGroups, heroMetrics,
+  paymentGatewayData, failedTransactionsData, mpinData, kycData, otpData, supportData,
+  solutionReviews, TEMPLATES
+};
+
+</script>
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useRef, useMemo } = React;
+const D = window.ESEWA_DATA;
+
+// ============================================================
+// SHARED HELPERS
+// ============================================================
+function sentimentOf(rating) {
+  if (rating >= 4) return "positive";
+  if (rating === 3) return "neutral";
+  return "negative";
+}
+
+function summarizeSentiment(reviews) {
+  const counts = { positive: 0, neutral: 0, negative: 0 };
+  reviews.forEach(r => counts[sentimentOf(r.rating)]++);
+  return counts;
+}
+
+function sentimentPercent(counts, total) {
+  if (!total) return 0;
+  return Math.round(counts / total * 100);
+}
+
+function matchKeyword(text, keyword) {
+  const haystack = (text || "").toLowerCase();
+  const tokens = (keyword || "").toLowerCase().split(/[\s/]+/).filter(Boolean);
+  if (!tokens.length) return false;
+  return tokens.some(token => haystack.includes(token));
+}
+
+function buildTrendSeries(reviews, period) {
+  const grouped = new Map();
+  reviews.forEach(r => {
+    const d = new Date(r.date);
+    let key;
+    if (period === "daily") {
+      key = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } else if (period === "weekly") {
+      const start = new Date(d);
+      start.setDate(start.getDate() - start.getDay());
+      key = start.toISOString().slice(0, 10);
+    } else if (period === "monthly") {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    } else {
+      key = `${d.getFullYear()}`;
+    }
+    if (!grouped.has(key)) grouped.set(key, { label: key, count: 0, dateLabel: key });
+    grouped.get(key).count += 1;
+  });
+  return Array.from(grouped.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function bucketMatches(date, bucketKey, period) {
+  const d = new Date(date);
+  if (period === "daily") {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) === bucketKey;
+  }
+  if (period === "weekly") {
+    const start = new Date(d);
+    start.setDate(start.getDate() - start.getDay());
+    return start.toISOString().slice(0, 10) === bucketKey;
+  }
+  if (period === "monthly") {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === bucketKey;
+  }
+  return `${d.getFullYear()}` === bucketKey;
+}
+
+function deriveOutcome(review) {
+  const text = (review.text || "").toLowerCase();
+  if (review.rating >= 4 || /(works great|great|love|resolved|approved|reliable|convenient|fast|smooth|easy)/i.test(text)) return "success";
+  return "failure";
+}
+
+function Stars({ rating }) {
+  return (
+    <span style={{ color: "#F0A93B", fontSize: 12, letterSpacing: 1 }}>
+      {"★".repeat(rating)}{"☆".repeat(5 - rating)}
+    </span>
+  );
+}
+
+function sentimentOf(rating) {
+  if (rating >= 4) return "positive";
+  if (rating === 3) return "neutral";
+  return "negative";
+}
+
+function sentimentColor(s) {
+  if (s === "positive") return "#60BB46";
+  if (s === "neutral") return "#F0A93B";
+  return "#E5484D";
+}
+
+function Badge({ children, color, bg }) {
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20,
+      background: bg, color: color, whiteSpace: "nowrap"
+    }}>{children}</span>
+  );
+}
+
+function SentimentSummary({ reviews }) {
+  const counts = summarizeSentiment(reviews);
+  const total = reviews.length;
+  const items = [
+    { key: "positive", label: "Positive", value: counts.positive, color: "var(--esewa-green)" },
+    { key: "neutral", label: "Neutral", value: counts.neutral, color: "var(--amber)" },
+    { key: "negative", label: "Negative", value: counts.negative, color: "var(--red)" }
+  ];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 12 }}>
+      {items.map(item => (
+        <div key={item.key} style={{ background: "var(--bg-soft)", border: "1px solid var(--border-soft)", borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-faint)", marginBottom: 4 }}>{item.label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.value} {total ? `(${sentimentPercent(counts[item.key], total)}%)` : "(0%)"}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KeywordReviewBox({ keyword, reviews }) {
+  const matches = reviews.filter(r => matchKeyword(r.text, keyword));
+  return (
+    <div style={{ border: "1px solid var(--border-soft)", borderRadius: 12, padding: 12, background: "var(--bg-soft)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>{keyword}</span>
+        <Badge color="#27500A" bg="#eaf6e6">{matches.length} match{matches.length === 1 ? "" : "es"}</Badge>
+      </div>
+      <SentimentSummary reviews={matches} />
+      <div style={{ display: "grid", gap: 8 }}>
+        {matches.length ? matches.slice(0, 3).map(r => <ReviewCard key={r.id} r={r} />) : <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No reviews matched this keyword.</div>}
+      </div>
+    </div>
+  );
+}
+
+function Card({ children, style }) {
+  return (
+    <div style={{
+      background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-soft)",
+      padding: "20px 22px", ...style
+    }}>{children}</div>
+  );
+}
+
+function SectionTitle({ icon, children, right }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {icon && <i className={`ti ${icon}`} style={{ fontSize: 16, color: "var(--esewa-green)" }}></i>}
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{children}</span>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function ReviewCard({ r }) {
+  const sent = sentimentOf(r.rating);
+  const col = sentimentColor(sent);
+  return (
+    <div style={{
+      padding: "12px 14px", borderRadius: 10, border: "1px solid var(--border-soft)",
+      background: "#fbfcfd", marginBottom: 8
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5, gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            width: 26, height: 26, borderRadius: "50%", background: "var(--esewa-navy)",
+            color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+          }}>{r.name.split(" ").map(n => n[0]).join("").slice(0,2)}</div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>{r.name}</div>
+            <Stars rating={r.rating} />
+          </div>
+        </div>
+        <Badge color={col} bg={col + "1a"}>{sent}</Badge>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.55, marginBottom: 4 }}>{r.text}</div>
+      <div style={{ fontSize: 10, color: "var(--text-faint)", display: "flex", gap: 8, alignItems: "center" }}>
+        <i className="ti ti-brand-google-play" style={{ fontSize: 11 }}></i>
+        {r.dateLabel} NPT
+        <span>· {r.helpful} found helpful</span>
+      </div>
+    </div>
+  );
+}
+
+function MetricTile({ label, value, sub, color }) {
+  return (
+    <div style={{ background: "#fbfcfd", borderRadius: 12, padding: "14px 16px", border: "1px solid var(--border-soft)" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: color || "var(--text-main)", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--text-soft)", marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function useChart(ref, config, deps) {
+  useEffect(() => {
+    if (!ref.current) return;
+    const chart = new Chart(ref.current, config);
+    return () => chart.destroy();
+    // eslint-disable-next-line
+  }, deps);
+}
+
+// ============================================================
+// SIDEBAR — Trend widget, problem statement, accordions
+// ============================================================
+function SidebarTrendWidget() {
+  const [period, setPeriod] = useState("weekly");
+  const ref = useRef(null);
+  const data = useMemo(() => D.aggregate(period).slice(-12), [period]);
+
+  useChart(ref, {
+    type: "line",
+    data: {
+      labels: data.map(d => d.dateLabel),
+      datasets: [{
+        data: data.map(d => d.volume),
+        borderColor: "#60BB46",
+        backgroundColor: "rgba(96,187,70,0.12)",
+        borderWidth: 2, pointRadius: 0, tension: 0.35, fill: true
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: { x: { display: false }, y: { display: false } }
+    }
+  }, [period, data]);
+
+  return (
+    <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.06)", borderRadius: 12, marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Review trend</span>
+      </div>
+      <div style={{ height: 50, position: "relative", marginBottom: 8 }}>
+        <canvas ref={ref}></canvas>
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        {["daily","weekly","monthly","yearly"].map(p => (
+          <button key={p} onClick={() => setPeriod(p)} style={{
+            flex: 1, fontSize: 10, padding: "4px 0", borderRadius: 6, border: "none", cursor: "pointer",
+            background: period === p ? "var(--esewa-green)" : "rgba(255,255,255,0.08)",
+            color: period === p ? "#0d2233" : "rgba(255,255,255,0.65)", fontWeight: 600, textTransform: "capitalize"
+          }}>{p[0].toUpperCase()}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProblemStatementSegment({ onSelect, active }) {
+  const items = [
+    { key: "mpin", icon: "ti-lock", label: "MPIN issues" },
+    { key: "kyc", icon: "ti-id-badge-2", label: "KYC verification hurdles" },
+    { key: "otp", icon: "ti-message-2", label: "OTP delivery delays" },
+    { key: "support", icon: "ti-headset", label: "Customer support blockages" }
+  ];
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.04em", padding: "0 4px", marginBottom: 8 }}>
+        Problem statement
+      </div>
+      {items.map(it => {
+        const stat = D.categoryStats[it.key];
+        const isActive = active === it.key;
+        return (
+          <button key={it.key} onClick={() => onSelect(it.key)} style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
+            borderRadius: 9, border: "none", cursor: "pointer", marginBottom: 3, textAlign: "left",
+            background: isActive ? "rgba(96,187,70,0.18)" : "transparent",
+            color: isActive ? "#9ee388" : "rgba(255,255,255,0.78)"
+          }}>
+            <i className={`ti ${it.icon}`} style={{ fontSize: 15, flexShrink: 0 }}></i>
+            <span style={{ fontSize: 12, fontWeight: 500, flex: 1 }}>{it.label}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#E5484D", background: "rgba(229,72,77,0.18)", padding: "1px 6px", borderRadius: 10 }}>{stat.trend}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AccordionMenu({ title, icon, items, onSelect, active, accentColor }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button onClick={() => setOpen(!open)} style={{
+        width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 10px",
+        borderRadius: 9, border: "none", cursor: "pointer", background: "rgba(255,255,255,0.04)",
+        color: "rgba(255,255,255,0.9)"
+      }}>
+        <i className={`ti ${icon}`} style={{ fontSize: 16, color: accentColor }}></i>
+        <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, textAlign: "left" }}>{title}</span>
+        <i className={`ti ti-chevron-${open ? "up" : "down"}`} style={{ fontSize: 14, opacity: 0.6 }}></i>
+      </button>
+      {open && (
+        <div style={{ marginTop: 4, paddingLeft: 8 }}>
+          {items.map(it => (
+            <button key={it.key} onClick={() => onSelect(it.key)} style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+              padding: "8px 12px", borderRadius: 8, border: "none", cursor: "pointer", marginBottom: 2, textAlign: "left",
+              background: active === it.key ? "rgba(96,187,70,0.16)" : "transparent",
+              color: active === it.key ? "#9ee388" : "rgba(255,255,255,0.68)"
+            }}>
+              <span style={{ fontSize: 11.5 }}>{it.label}</span>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{it.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NavItem({ icon, label, view, current, onClick }) {
+  const isActive = current === view;
+  return (
+    <button onClick={() => onClick(view)} style={{
+      width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "11px 12px",
+      borderRadius: 10, border: "none", cursor: "pointer", marginBottom: 3, textAlign: "left",
+      background: isActive ? "var(--esewa-green)" : "transparent",
+      color: isActive ? "#0d2233" : "rgba(255,255,255,0.85)",
+      fontWeight: isActive ? 700 : 500, transition: "background 0.15s"
+    }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 17, flexShrink: 0 }}></i>
+      <span style={{ fontSize: 13 }}>{label}</span>
+    </button>
+  );
+}
+
+function Sidebar({ view, setView, mobileOpen, setMobileOpen }) {
+  const reviewAnalysisItems = [
+    { key: "systemFailures", label: "System failures", count: D.reviewAnalysisGroups.systemFailures.count },
+    { key: "paymentDropouts", label: "Payment gateway dropouts", count: D.reviewAnalysisGroups.paymentDropouts.count },
+    { key: "uiConfusion", label: "UI / UX confusion", count: D.reviewAnalysisGroups.uiConfusion.count }
+  ];
+  const suggestionItems = [
+    { key: "customerCare", label: "Customer care upgrades", count: D.suggestionGroups.customerCare.count },
+    { key: "paymentOptimizations", label: "Payment process optimizations", count: D.suggestionGroups.paymentOptimizations.count },
+    { key: "infrastructureUpgrades", label: "System infrastructure upgrades", count: D.suggestionGroups.infrastructureUpgrades.count }
+  ];
+
+  const content = (
+    <div style={{
+      width: 268, background: "var(--esewa-navy)", height: "100%", padding: "20px 14px",
+      display: "flex", flexDirection: "column", overflowY: "auto"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px", marginBottom: 22 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10, background: "var(--esewa-green)",
+          display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#0d2233", fontSize: 15
+        }}>eS</div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>eSewa Insights</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Review analytics</div>
+        </div>
+        <button className="mobile-close" onClick={() => setMobileOpen(false)} style={{
+          marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", display: "none"
+        }}><i className="ti ti-x" style={{ fontSize: 18 }}></i></button>
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.04em", padding: "0 4px", marginBottom: 8 }}>
+        Navigation
+      </div>
+      <div style={{ marginBottom: 18 }}>
+        <NavItem icon="ti-layout-dashboard" label="Main dashboard" view="main" current={view} onClick={setView} />
+        <NavItem icon="ti-credit-card" label="Payment gateway monitor" view="paymentGateway" current={view} onClick={setView} />
+        <NavItem icon="ti-credit-card-off" label="Transaction failures" view="failedTransactions" current={view} onClick={setView} />
+        <NavItem icon="ti-bug" label="App performance and bugs" view="appPerformance" current={view} onClick={setView} />
+      </div>
+
+      <SidebarTrendWidget />
+      <ProblemStatementSegment active={view} onSelect={setView} />
+
+      <AccordionMenu title="Review analysis" icon="ti-message-2-bolt" items={reviewAnalysisItems} active={view} onSelect={setView} accentColor="#60BB46" />
+      <AccordionMenu title="Suggestions engine" icon="ti-bulb" items={suggestionItems} active={view} onSelect={setView} accentColor="#F0A93B" />
+
+      <div style={{ marginTop: "auto", paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>Data source: Google Play Store</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", padding: "0 4px" }}>Last synced: just now</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div style={{ display: window.innerWidth < 900 ? "none" : "block" }} className="sidebar-desktop">{content}</div>
+      {mobileOpen && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
+          background: "rgba(0,0,0,0.4)"
+        }} onClick={() => setMobileOpen(false)}>
+          <div style={{ height: "100%" }} onClick={e => e.stopPropagation()}>{content}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ============================================================
+// MAIN DASHBOARD
+// ============================================================
+function HeroMetrics() {
+  const m = D.heroMetrics;
+  const total = m.positive + m.neutral + m.negative;
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <SectionTitle icon="ti-chart-pie">Hero sentiment metrics</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="App rating" value={`${m.appRating}★`} sub={`${m.ratingTrendDelta} vs last quarter`} color="var(--esewa-navy)" />
+        <MetricTile label="Total reviews" value={m.totalReviews.toLocaleString()} sub="All-time analyzed" />
+        <MetricTile label="Positive" value={m.positive.toLocaleString()} sub={`${Math.round(m.positive/total*100)}% of total`} color="var(--esewa-green)" />
+        <MetricTile label="Negative" value={m.negative.toLocaleString()} sub={`${Math.round(m.negative/total*100)}% of total`} color="var(--red)" />
+      </div>
+      <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden" }}>
+        <div style={{ width: `${m.positive/total*100}%`, background: "var(--esewa-green)" }}></div>
+        <div style={{ width: `${m.neutral/total*100}%`, background: "var(--amber)" }}></div>
+        <div style={{ width: `${m.negative/total*100}%`, background: "var(--red)" }}></div>
+      </div>
+      <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 11, color: "var(--text-soft)" }}>
+        <span><span style={{ color: "var(--esewa-green)" }}>●</span> Positive {Math.round(m.positive/total*100)}%</span>
+        <span><span style={{ color: "var(--amber)" }}>●</span> Neutral {Math.round(m.neutral/total*100)}%</span>
+        <span><span style={{ color: "var(--red)" }}>●</span> Negative {Math.round(m.negative/total*100)}%</span>
+      </div>
+    </Card>
+  );
+}
+
+function FocusWindowCard() {
+  const reviews = D.focusReviews;
+  const sentCounts = summarizeSentiment(reviews);
+  const pieRef = useRef(null);
+  const [feedPaused, setFeedPaused] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(6);
+  const [selectedOutcome, setSelectedOutcome] = useState("all");
+  const sorted = useMemo(() => [...reviews].sort((a,b) => b.date - a.date), [reviews]);
+  const filtered = useMemo(() => {
+    if (selectedOutcome === "all") return sorted;
+    return sorted.filter(r => deriveOutcome(r) === selectedOutcome);
+  }, [selectedOutcome, sorted]);
+
+  useChart(pieRef, {
+    type: "doughnut",
+    data: {
+      labels: ["Positive", "Neutral", "Negative"],
+      datasets: [{
+        data: [sentCounts.positive, sentCounts.neutral, sentCounts.negative],
+        backgroundColor: ["#60BB46", "#F0A93B", "#E5484D"],
+        borderWidth: 3, borderColor: "#fff"
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "68%",
+      plugins: { legend: { display: false } }
+    }
+  }, [reviews]);
+
+  useEffect(() => {
+    if (feedPaused) return;
+    const t = setInterval(() => setVisibleCount(v => Math.min(v + 1, filtered.length)), 2500);
+    return () => clearInterval(t);
+  }, [feedPaused, filtered.length]);
+
+  return (
+    <Card style={{ marginBottom: 16, border: "1.5px solid var(--esewa-green)", background: "linear-gradient(180deg, #f7fdf5 0%, #ffffff 100%)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <i className="ti ti-zoom-in" style={{ fontSize: 16, color: "var(--esewa-green)" }}></i>
+          <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>48-hour deep dive — June 24–25, 2026</span>
+        </div>
+        <Badge color="#0d6b2e" bg="#eaf6e6">{reviews.length} reviews captured · NPT</Badge>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 280px) 1fr", gap: 20 }} className="focus-grid">
+        <div>
+          <div style={{ position: "relative", height: 160, marginBottom: 10 }}>
+            <canvas ref={pieRef}></canvas>
+            <div style={{
+              position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center"
+            }}>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{reviews.length}</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)" }}>reviews</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span><span style={{ color: "var(--esewa-green)" }}>●</span> Positive</span><b>{sentCounts.positive}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span><span style={{ color: "var(--amber)" }}>●</span> Neutral</span><b>{sentCounts.neutral}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span><span style={{ color: "var(--red)" }}>●</span> Negative</span><b>{sentCounts.negative}</b></div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-soft)", textTransform: "uppercase" }}>
+              <i className="ti ti-broadcast" style={{ fontSize: 12, marginRight: 4, color: "var(--esewa-green)" }}></i>
+              Real-time review feed
+            </span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {['all','success','failure'].map(option => (
+                <button key={option} onClick={() => { setSelectedOutcome(option); setVisibleCount(6); }} style={{
+                  fontSize: 10, padding: "3px 8px", borderRadius: 14, border: "1px solid var(--border-soft)",
+                  background: selectedOutcome === option ? "var(--esewa-green)" : "#fff", cursor: "pointer", color: selectedOutcome === option ? "#fff" : "var(--text-soft)", textTransform: "capitalize"
+                }}>{option}</button>
+              ))}
+              <button onClick={() => setFeedPaused(p => !p)} style={{
+                fontSize: 10, padding: "3px 9px", borderRadius: 14, border: "1px solid var(--border-soft)",
+                background: "#fff", cursor: "pointer", color: "var(--text-soft)"
+              }}>{feedPaused ? "▶ Resume" : "❙❙ Pause"}</button>
+            </div>
+          </div>
+          <SentimentSummary reviews={filtered.slice(0, visibleCount)} />
+          <div style={{ maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+            {filtered.slice(0, visibleCount).map(r => <ReviewCard key={r.id} r={r} />)}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SentimentTrendChart() {
+  const [period, setPeriod] = useState("monthly");
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  const ref = useRef(null);
+  const data = useMemo(() => D.aggregate(period), [period]);
+  const sliced = period === "daily" ? data.slice(-30) : period === "weekly" ? data.slice(-16) : data;
+  const reviewsForPoint = useMemo(() => {
+    if (!selectedPoint) return [];
+    return D.reviews.filter(r => bucketMatches(r.date, selectedPoint, period));
+  }, [selectedPoint, period]);
+
+  useChart(ref, {
+    type: "line",
+    data: {
+      labels: sliced.map(d => d.dateLabel),
+      datasets: [
+        { label: "Positive", data: sliced.map(d => d.positive), borderColor: "#60BB46", backgroundColor: "rgba(96,187,70,0.1)", tension: 0.3, fill: false, pointRadius: 4, pointHoverRadius: 6 },
+        { label: "Neutral", data: sliced.map(d => d.neutral), borderColor: "#F0A93B", backgroundColor: "rgba(240,169,59,0.1)", tension: 0.3, fill: false, pointRadius: 4, pointHoverRadius: 6 },
+        { label: "Negative", data: sliced.map(d => d.negative), borderColor: "#E5484D", backgroundColor: "rgba(229,72,77,0.1)", tension: 0.3, fill: false, pointRadius: 4, pointHoverRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      onClick: (_, elements) => {
+        if (!elements?.length) return;
+        const idx = elements[0].index;
+        setSelectedPoint(sliced[idx]?.dateLabel || null);
+      },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } },
+        y: { ticks: { font: { size: 10 } }, grid: { color: "#eef1f4" } }
+      }
+    }
+  }, [period, sliced]);
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <SectionTitle icon="ti-chart-bar" right={
+        <div style={{ display: "flex", gap: 4 }}>
+          {["daily","weekly","monthly","yearly"].map(p => (
+            <button key={p} onClick={() => setPeriod(p)} style={{
+              fontSize: 11, padding: "5px 11px", borderRadius: 7, border: "1px solid var(--border-soft)", cursor: "pointer",
+              background: period === p ? "var(--esewa-green)" : "#fff",
+              color: period === p ? "#fff" : "var(--text-soft)", fontWeight: 600, textTransform: "capitalize"
+            }}>{p}</button>
+          ))}
+        </div>
+      }>Sentiment analysis over time</SectionTitle>
+      <div style={{ display: "flex", gap: 16, marginBottom: 10, fontSize: 11, color: "var(--text-soft)" }}>
+        <span><span style={{ color: "var(--esewa-green)" }}>■</span> Positive</span>
+        <span><span style={{ color: "var(--amber)" }}>■</span> Neutral</span>
+        <span><span style={{ color: "var(--red)" }}>■</span> Negative</span>
+      </div>
+      <div style={{ position: "relative", height: 260 }}>
+        <canvas ref={ref} role="img" aria-label="Line chart showing positive, neutral and negative review sentiment over time"></canvas>
+      </div>
+      {selectedPoint && (
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--border-soft)", paddingTop: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Reviews for {selectedPoint}</div>
+          <SentimentSummary reviews={reviewsForPoint} />
+          <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
+            {reviewsForPoint.length ? reviewsForPoint.slice(0, 8).map(r => <ReviewCard key={r.id} r={r} />) : <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No reviews available for this time period.</div>}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SolutionHub() {
+  const reviews = D.solutionReviews;
+  return (
+    <Card>
+      <SectionTitle icon="ti-bulb" right={<Badge color="#854F0B" bg="#FAEEDA">{reviews.length} actionable suggestions</Badge>}>
+        Solution-oriented reviews hub
+      </SectionTitle>
+      <div style={{ fontSize: 11.5, color: "var(--text-soft)", marginBottom: 14 }}>
+        Reviews where users proposed concrete fixes, isolated from general complaints.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+        {reviews.map(r => (
+          <div key={r.id} style={{
+            padding: "13px 14px", borderRadius: 11, border: "1px solid var(--border-soft)",
+            background: "#f7fcf6", borderLeft: "3px solid var(--esewa-green)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)" }}>{r.name}</span>
+              <i className="ti ti-bulb" style={{ fontSize: 13, color: "var(--esewa-green)" }}></i>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.5 }}>{r.text}</div>
+            <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 6 }}>{r.dateLabel} NPT</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function MainDashboard() {
+  return (
+    <div>
+      <HeroMetrics />
+      <FocusWindowCard />
+      <SentimentTrendChart />
+      <SolutionHub />
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: PAYMENT GATEWAY MONITOR
+// ============================================================
+function PaymentGatewayDashboard() {
+  const data = D.paymentGatewayData;
+  const volRef = useRef(null);
+  const successRef = useRef(null);
+  const [period, setPeriod] = useState("monthly");
+  const trendData = useMemo(() => D.aggregate(period).slice(-10), [period]);
+  const reviewData = D.reviews.filter(r => r.category === "payment");
+
+  useChart(volRef, {
+    type: "line",
+    data: {
+      labels: ["D-9","D-8","D-7","D-6","D-5","D-4","D-3","D-2","D-1","Today"],
+      datasets: [{ data: data.volumeTrend, borderColor: "#1C3F60", backgroundColor: "rgba(28,63,96,0.08)", borderWidth: 2, tension: 0.3, fill: true, pointRadius: 3 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: "#eef1f4" }, ticks: { font: { size: 10 } } } } }
+  }, []);
+
+  useChart(successRef, {
+    type: "doughnut",
+    data: { labels: ["Success", "Failure"], datasets: [{ data: [data.successRate, data.failureRate], backgroundColor: ["#60BB46", "#E5484D"], borderWidth: 3, borderColor: "#fff" }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { display: false } } }
+  }, []);
+
+  const outcomeCounts = summarizeSentiment(reviewData);
+  const reviewSummary = [
+    { label: "Success outcome", value: outcomeCounts.positive, color: "var(--esewa-green)" },
+    { label: "Neutral outcome", value: outcomeCounts.neutral, color: "var(--amber)" },
+    { label: "Failure outcome", value: outcomeCounts.negative, color: "var(--red)" }
+  ];
+
+  return (
+    <div>
+      <DashboardHeader icon="ti-credit-card" title="Payment gateway monitor" subtitle="Success vs failure rates, bank-linkage errors, and transaction volume" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Success rate" value={`${data.successRate}%`} color="var(--esewa-green)" />
+        <MetricTile label="Failure rate" value={`${data.failureRate}%`} color="var(--red)" />
+        <MetricTile label="Avg time to refund" value={`${data.avgTimeToRefundHours} hrs`} sub="SLA target: 24 hrs" />
+        <MetricTile label="Bank errors logged" value={data.bankErrors.reduce((s,b)=>s+b.count,0)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12, marginBottom: 16 }} className="responsive-2col">
+        <Card>
+          <SectionTitle icon="ti-chart-line" right={<div style={{ display: "flex", gap: 4 }}>{["daily","weekly","monthly","yearly"].map(p => <button key={p} onClick={() => setPeriod(p)} style={{fontSize:11,padding:"5px 9px",borderRadius:7,border:"1px solid var(--border-soft)",background:period===p?"var(--esewa-green)":"#fff",color:period===p?"#fff":"var(--text-soft)",fontWeight:600,textTransform:"capitalize"}}>{p}</button>)}</div>}>Review sentiment by period</SectionTitle>
+          <div style={{ position: "relative", height: 220 }}><canvas ref={volRef} role="img" aria-label="Line chart of review sentiment over time"></canvas></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginTop: 10 }}>
+            {trendData.slice(-4).map((point, idx) => <div key={idx} style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "8px 10px", border: "1px solid var(--border-soft)" }}><div style={{ fontSize: 10, color: "var(--text-faint)" }}>{point.dateLabel}</div><div style={{ fontSize: 12, fontWeight: 700 }}>{point.volume} reviews</div></div>)}
+          </div>
+        </Card>
+        <Card>
+          <SectionTitle icon="ti-chart-donut">Success vs failure</SectionTitle>
+          <div style={{ position: "relative", height: 180 }}><canvas ref={successRef} role="img" aria-label="Donut chart showing 78.4% success rate and 21.6% failure rate"></canvas></div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 10, fontSize: 11 }}>
+            <span><span style={{ color: "var(--esewa-green)" }}>●</span> Success {data.successRate}%</span>
+            <span><span style={{ color: "var(--red)" }}>●</span> Failure {data.failureRate}%</span>
+          </div>
+        </Card>
+      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-message-2">Sentiment summary from payment reviews</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+          {reviewSummary.map(item => <div key={item.label} style={{ background: "var(--bg-soft)", border: "1px solid var(--border-soft)", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "var(--text-faint)", textTransform: "uppercase" }}>{item.label}</div><div style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.value}</div></div>)}
+        </div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-building-bank">Bank-linkage error breakdown</SectionTitle>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                {["Bank","Error code","Occurrences","Description"].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "8px 6px", color: "var(--text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.bankErrors.map(b => (
+                <tr key={b.errorCode} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                  <td style={{ padding: "9px 6px", fontWeight: 600 }}>{b.bank}</td>
+                  <td style={{ padding: "9px 6px" }} className="mono">{b.errorCode}</td>
+                  <td style={{ padding: "9px 6px" }}>
+                    <span style={{ color: "var(--red)", fontWeight: 700 }}>{b.count}</span>
+                  </td>
+                  <td style={{ padding: "9px 6px", color: "var(--text-soft)" }}>{b.desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: FAILED TRANSACTIONS
+// ============================================================
+function FailedTransactionsDashboard() {
+  const data = D.failedTransactionsData;
+  const reviews = D.reviews.filter(r => r.category === "payment");
+  const keywordGroups = ["failed","deducted","stuck","pending","transaction"];
+  return (
+    <div>
+      <DashboardHeader icon="ti-credit-card-off" title="Transaction failures" subtitle='Deep-dive into drops matching "money deducted", "failed", "stuck"' />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Total failed" value={data.totalFailed.toLocaleString()} color="var(--red)" />
+        <MetricTile label="Avg refund time" value={data.avgRefundTime} />
+        <MetricTile label="Refund SLA" value="24 hrs" sub={data.refundSLA} />
+        <MetricTile label="Matched reviews" value={data.keywordMatches.length} />
+      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-list-details">Recent error log</SectionTitle>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                {["Time (NPT)","Transaction ID","Error","Amount"].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "8px 6px", color: "var(--text-faint)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.errorLog.map(e => (
+                <tr key={e.txnId} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                  <td style={{ padding: "9px 6px" }}>{e.time}</td>
+                  <td style={{ padding: "9px 6px" }} className="mono">{e.txnId}</td>
+                  <td style={{ padding: "9px 6px" }}><Badge color="#A32D2D" bg="#FCEBEB">{e.error}</Badge></td>
+                  <td style={{ padding: "9px 6px", fontWeight: 600 }}>{e.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar">Failure issue frequency by keyword</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+          {keywordGroups.map(keyword => {
+            const matches = reviews.filter(r => matchKeyword(r.text, keyword));
+            return <div key={keyword} style={{ background: "var(--bg-soft)", border: "1px solid var(--border-soft)", borderRadius: 10, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 700, textTransform: "capitalize" }}>{keyword}</div><div style={{ fontSize: 16, fontWeight: 700, color: "var(--red)" }}>{matches.length}</div></div>;
+          })}
+        </div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-message-2">User reviews matching failure keywords</SectionTitle>
+        <SentimentSummary reviews={reviews} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {keywordGroups.map(keyword => <KeywordReviewBox key={keyword} keyword={keyword} reviews={reviews} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: MPIN
+// ============================================================
+function MpinDashboard() {
+  const data = D.mpinData;
+  const [period, setPeriod] = useState("weekly");
+  const ref = useRef(null);
+  const trendSeries = useMemo(() => {
+    const base = [data.lockouts, data.resetFailures, data.biometricFallbackFails];
+    const labels = ["Lockouts","Reset failures","Biometric fails"];
+    return { labels, series: base };
+  }, [data]);
+  useChart(ref, {
+    type: "bar",
+    data: { labels: trendSeries.labels, datasets: [{ data: trendSeries.series, backgroundColor: ["#1C3F60", "#60BB46", "#F0A93B"], borderRadius: 5 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: "#eef1f4" }, ticks: { font: { size: 10 } } } } }
+  }, [trendSeries]);
+  const reviews = D.focusReviews.filter(r => r.category === "mpin");
+  return (
+    <div>
+      <DashboardHeader icon="ti-lock" title="MPIN dashboard" subtitle="Authentication failures, password reset bugs, biometric lockouts" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Total incidents" value={data.totalIncidents} color="var(--red)" />
+        <MetricTile label="Account lockouts" value={data.lockouts} />
+        <MetricTile label="Reset failures" value={data.resetFailures} />
+        <MetricTile label="Biometric fallback fails" value={data.biometricFallbackFails} />
+      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar" right={<div style={{ display: "flex", gap: 4 }}>{["daily","weekly","monthly","yearly"].map(p => <button key={p} onClick={() => setPeriod(p)} style={{fontSize:11,padding:"5px 9px",borderRadius:7,border:"1px solid var(--border-soft)",background:period===p?"var(--esewa-green)":"#fff",color:period===p?"#fff":"var(--text-soft)",fontWeight:600,textTransform:"capitalize"}}>{p}</button>)}</div>}>Incident breakdown</SectionTitle>
+        <div style={{ position: "relative", height: 200 }}><canvas ref={ref} role="img" aria-label="Bar chart of MPIN incident categories"></canvas></div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-message-2">User reports</SectionTitle>
+        <SentimentSummary reviews={reviews} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {reviews.slice(0, 8).map(r => <ReviewCard key={r.id} r={r} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: KYC
+// ============================================================
+function KycDashboard() {
+  const data = D.kycData;
+  const [period, setPeriod] = useState("monthly");
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  const ref = useRef(null);
+  const trendData = useMemo(() => D.aggregate(period).slice(-8), [period]);
+  useChart(ref, {
+    type: "bar",
+    data: {
+      labels: data.rejectionReasons.map(r => r.reason),
+      datasets: [{ data: data.rejectionReasons.map(r => r.pct), backgroundColor: "#F0A93B", borderRadius: 5 }]
+    },
+    options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: "#eef1f4" }, ticks: { font: { size: 10 } } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } } }
+  }, []);
+  const trendRef = useRef(null);
+  const reviewsForPoint = useMemo(() => {
+    if (!selectedPoint) return [];
+    return D.reviews.filter(r => bucketMatches(r.date, selectedPoint, period));
+  }, [selectedPoint, period]);
+  useChart(trendRef, {
+    type: "line",
+    data: { labels: trendData.map(d => d.dateLabel), datasets: [{ label: "Review volume", data: trendData.map(d => d.volume), borderColor: "#1C3F60", backgroundColor: "rgba(28,63,96,0.12)", tension: 0.3, fill: true, pointRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, onClick: (_, elements) => { if (!elements?.length) return; setSelectedPoint(trendData[elements[0].index]?.dateLabel || null); }, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } }, y: { ticks: { font: { size: 10 } }, grid: { color: "#eef1f4" } } } }
+  }, [trendData]);
+  const reviews = D.focusReviews.filter(r => r.category === "kyc");
+  return (
+    <div>
+      <DashboardHeader icon="ti-id-badge-2" title="KYC dashboard" subtitle="Document rejection reasons, verification latency, user friction points" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Total incidents" value={data.totalIncidents} color="var(--red)" />
+        <MetricTile label="Avg approval time" value={`${data.avgApprovalHours} hrs`} sub={`Promised: ${data.promisedHours} hrs`} />
+        <MetricTile label="SLA breach" value={`${Math.round((data.avgApprovalHours/data.promisedHours))}x over`} color="var(--red)" />
+      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar" right={<div style={{ display: "flex", gap: 4 }}>{["daily","weekly","monthly","yearly"].map(p => <button key={p} onClick={() => setPeriod(p)} style={{fontSize:11,padding:"5px 9px",borderRadius:7,border:"1px solid var(--border-soft)",background:period===p?"var(--esewa-green)":"#fff",color:period===p?"#fff":"var(--text-soft)",fontWeight:600,textTransform:"capitalize"}}>{p}</button>)}</div>}>Incident trend</SectionTitle>
+        <div style={{ position: "relative", height: 220 }}><canvas ref={trendRef} role="img" aria-label="Line chart of KYC review volume over time"></canvas></div>
+        {selectedPoint && <div style={{ marginTop: 12 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Reviews for {selectedPoint}</div><div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>{reviewsForPoint.length ? reviewsForPoint.slice(0, 6).map(r => <ReviewCard key={r.id} r={r} />) : <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No reviews available for this period.</div>}</div></div>}
+      </Card>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar">Rejection reasons</SectionTitle>
+        <div style={{ position: "relative", height: 220 }}><canvas ref={ref} role="img" aria-label="Horizontal bar chart of KYC rejection reasons by percentage"></canvas></div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-message-2">User reports</SectionTitle>
+        <SentimentSummary reviews={reviews} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {reviews.slice(0, 8).map(r => <ReviewCard key={r.id} r={r} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: OTP
+// ============================================================
+function OtpDashboard() {
+  const data = D.otpData;
+  const [period, setPeriod] = useState("monthly");
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  const ref = useRef(null);
+  const trendData = useMemo(() => D.aggregate(period).slice(-8), [period]);
+  const trendRef = useRef(null);
+  useChart(ref, {
+    type: "bar",
+    data: {
+      labels: data.carrierBreakdown.map(c => c.carrier),
+      datasets: [
+        { label: "Avg delay (sec)", data: data.carrierBreakdown.map(c => c.avgDelaySec), backgroundColor: "#1C3F60", yAxisID: "y" },
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 11 } } }, y: { grid: { color: "#eef1f4" }, ticks: { font: { size: 10 } } } } }
+  }, []);
+  const reviewsForPoint = useMemo(() => {
+    if (!selectedPoint) return [];
+    return D.reviews.filter(r => bucketMatches(r.date, selectedPoint, period));
+  }, [selectedPoint, period]);
+  useChart(trendRef, {
+    type: "line",
+    data: { labels: trendData.map(d => d.dateLabel), datasets: [{ label: "Review volume", data: trendData.map(d => d.volume), borderColor: "#60BB46", backgroundColor: "rgba(96,187,70,0.14)", tension: 0.3, fill: true, pointRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, onClick: (_, elements) => { if (!elements?.length) return; setSelectedPoint(trendData[elements[0].index]?.dateLabel || null); }, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } }, y: { ticks: { font: { size: 10 } }, grid: { color: "#eef1f4" } } } }
+  }, [trendData]);
+  const reviews = D.focusReviews.filter(r => r.category === "otp");
+  return (
+    <div>
+      <DashboardHeader icon="ti-message-2" title="OTP dashboard" subtitle="Carrier-specific delay metrics and timeout errors" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Total incidents" value={data.totalIncidents} color="var(--red)" />
+        <MetricTile label="Avg delay" value={`${data.avgDelaySeconds}s`} />
+        <MetricTile label="Timeout rate" value={`${data.timeoutRate}%`} color="var(--red)" />
+      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar" right={<div style={{ display: "flex", gap: 4 }}>{["daily","weekly","monthly","yearly"].map(p => <button key={p} onClick={() => setPeriod(p)} style={{fontSize:11,padding:"5px 9px",borderRadius:7,border:"1px solid var(--border-soft)",background:period===p?"var(--esewa-green)":"#fff",color:period===p?"#fff":"var(--text-soft)",fontWeight:600,textTransform:"capitalize"}}>{p}</button>)}</div>}>OTP delay trend</SectionTitle>
+        <div style={{ position: "relative", height: 220 }}><canvas ref={trendRef} role="img" aria-label="Line chart of OTP-related review volume over time"></canvas></div>
+        {selectedPoint && <div style={{ marginTop: 12 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Reviews for {selectedPoint}</div><div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>{reviewsForPoint.length ? reviewsForPoint.slice(0, 6).map(r => <ReviewCard key={r.id} r={r} />) : <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No reviews available for this period.</div>}</div></div>}
+      </Card>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar">Carrier delay comparison</SectionTitle>
+        <div style={{ position: "relative", height: 220 }}><canvas ref={ref} role="img" aria-label="Bar chart comparing average OTP delay in seconds across mobile carriers"></canvas></div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 14 }}>
+          {data.carrierBreakdown.map(c => (
+            <div key={c.carrier} style={{ background: "#fbfcfd", borderRadius: 10, padding: 12, border: "1px solid var(--border-soft)" }}>
+              <div style={{ fontSize: 12, fontWeight: 700 }}>{c.carrier}</div>
+              <div style={{ fontSize: 11, color: "var(--text-soft)" }}>Fail rate: <b style={{ color: "var(--red)" }}>{c.failRate}%</b></div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-message-2">User reports</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {reviews.slice(0, 8).map(r => <ReviewCard key={r.id} r={r} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: CUSTOMER SUPPORT
+// ============================================================
+function SupportDashboard() {
+  const data = D.supportData;
+  const [period, setPeriod] = useState("monthly");
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  const ref = useRef(null);
+  const trendData = useMemo(() => D.aggregate(period).slice(-8), [period]);
+  const trendRef = useRef(null);
+  useChart(ref, {
+    type: "doughnut",
+    data: {
+      labels: data.channelPrefs.map(c => c.channel),
+      datasets: [{ data: data.channelPrefs.map(c => c.pct), backgroundColor: ["#1C3F60","#60BB46","#F0A93B","#94a3b8"], borderWidth: 3, borderColor: "#fff" }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, cutout: "62%", plugins: { legend: { display: false } } }
+  }, []);
+  const reviewsForPoint = useMemo(() => {
+    if (!selectedPoint) return [];
+    return D.reviews.filter(r => bucketMatches(r.date, selectedPoint, period));
+  }, [selectedPoint, period]);
+  useChart(trendRef, {
+    type: "line",
+    data: { labels: trendData.map(d => d.dateLabel), datasets: [{ label: "Support reviews", data: trendData.map(d => d.volume), borderColor: "#E5484D", backgroundColor: "rgba(229,72,77,0.12)", tension: 0.3, fill: true, pointRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, onClick: (_, elements) => { if (!elements?.length) return; setSelectedPoint(trendData[elements[0].index]?.dateLabel || null); }, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } }, y: { ticks: { font: { size: 10 } }, grid: { color: "#eef1f4" } } } }
+  }, [trendData]);
+  const reviews = D.focusReviews.filter(r => r.category === "support");
+  return (
+    <div>
+      <DashboardHeader icon="ti-headset" title="Customer support dashboard" subtitle="Hold times, satisfaction ratings, communication channel preferences" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Total incidents" value={data.totalIncidents} color="var(--red)" />
+        <MetricTile label="Avg hold time" value={`${data.avgHoldTimeMin} min`} />
+        <MetricTile label="Satisfaction score" value={`${data.satisfactionScore}/5`} color="var(--red)" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 12, marginBottom: 16 }} className="responsive-2col">
+        <Card>
+          <SectionTitle icon="ti-chart-donut">Channel preferences</SectionTitle>
+          <div style={{ position: "relative", height: 190 }}><canvas ref={ref} role="img" aria-label="Donut chart of customer support channel preferences: phone, in-app chat, email, social media"></canvas></div>
+        </Card>
+        <Card>
+          <SectionTitle icon="ti-list">Channel breakdown</SectionTitle>
+          {data.channelPrefs.map((c,i) => (
+            <div key={c.channel} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: ["#1C3F60","#60BB46","#F0A93B","#94a3b8"][i], flexShrink: 0 }}></span>
+              <span style={{ fontSize: 12, flex: 1 }}>{c.channel}</span>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>{c.pct}%</span>
+            </div>
+          ))}
+        </Card>
+      </div>
+      <Card>
+        <SectionTitle icon="ti-message-2">User reports</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {reviews.slice(0, 8).map(r => <ReviewCard key={r.id} r={r} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ISOLATED DASHBOARD: APP PERFORMANCE & BUGS
+// ============================================================
+function AppPerformanceDashboard() {
+  const reviews = D.focusReviews.filter(r => r.category === "performance");
+  const stat = D.categoryStats.performance;
+  const chartRef = useRef(null);
+  const categories = ["Crash", "Freeze", "Slow load"];
+  const values = [142, 98, 116];
+  useChart(chartRef, {
+    type: "bar",
+    data: { labels: categories, datasets: [{ data: values, backgroundColor: ["#E5484D", "#F0A93B", "#60BB46"], borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: "#eef1f4" }, ticks: { font: { size: 10 } } } } }
+  }, []);
+  return (
+    <div>
+      <DashboardHeader icon="ti-bug" title="App performance and bugs" subtitle="Crashes, freezes, slow load times, and UI rendering issues" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <MetricTile label="Total incidents" value={stat.count} color="var(--red)" sub={`${stat.trend} this month`} />
+        <MetricTile label="Crash reports" value="142" />
+        <MetricTile label="Freeze reports" value="98" />
+        <MetricTile label="Slow load reports" value="116" />
+      </div>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar">Crash / freeze / slow load report counts</SectionTitle>
+        <div style={{ position: "relative", height: 220 }}><canvas ref={chartRef} role="img" aria-label="Bar chart comparing crash, freeze, and slow load reports"></canvas></div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-message-2">User reports</SectionTitle>
+        <SentimentSummary reviews={reviews} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {reviews.slice(0, 10).map(r => <ReviewCard key={r.id} r={r} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function DashboardHeader({ icon, title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <i className={`ti ${icon}`} style={{ fontSize: 20, color: "var(--esewa-green)" }}></i>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{title}</h1>
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--text-soft)" }}>{subtitle}</div>
+    </div>
+  );
+}
+
+// ============================================================
+// REVIEW ANALYSIS SUB-VIEWS (from sidebar accordion)
+// ============================================================
+function ReviewAnalysisView({ groupKey }) {
+  const group = D.reviewAnalysisGroups[groupKey];
+  const catMap = { systemFailures: "performance", paymentDropouts: "payment", uiConfusion: "performance" };
+  const keywordMap = {
+    systemFailures: ["Server", "Crash", "Down", "Timeout", "Freeze"],
+    paymentDropouts: ["Failed", "Deducted", "Stuck", "Pending", "Transaction"],
+    uiConfusion: ["Confusing", "Can't Find", "Hidden", "Unseen"]
+  };
+  const reviews = D.reviews.filter(r => r.category === catMap[groupKey]);
+  const keywordRef = useRef(null);
+  const counts = keywordMap[groupKey].map(keyword => ({ keyword, count: reviews.filter(r => matchKeyword(r.text, keyword)).length }));
+  useChart(keywordRef, {
+    type: "bar",
+    data: { labels: counts.map(c => c.keyword), datasets: [{ data: counts.map(c => c.count), backgroundColor: ["#1C3F60", "#60BB46", "#F0A93B", "#E5484D", "#94a3b8"], borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: "#eef1f4" }, ticks: { font: { size: 10 } } } } }
+  }, [groupKey]);
+  return (
+    <div>
+      <DashboardHeader icon="ti-message-2-bolt" title={group.label} subtitle={`Grouped from the wider review dataset · ${group.count} matching reviews`} />
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-tags">Matched keywords</SectionTitle>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {keywordMap[groupKey].map(ex => (
+            <span key={ex} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 20, background: "#eaf6e6", color: "#27500A", fontWeight: 600 }}>{ex}</span>
+          ))}
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 16 }}>
+        <SectionTitle icon="ti-chart-bar">Issue frequency by keyword</SectionTitle>
+        <div style={{ position: "relative", height: 220 }}><canvas ref={keywordRef} role="img" aria-label="Bar chart of review issues by keyword"></canvas></div>
+      </Card>
+      <Card>
+        <SectionTitle icon="ti-message-2">Keyword-specific review panels</SectionTitle>
+        <SentimentSummary reviews={reviews} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {keywordMap[groupKey].map(keyword => <KeywordReviewBox key={keyword} keyword={keyword} reviews={reviews} />)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// SUGGESTIONS ENGINE SUB-VIEWS (from sidebar accordion)
+// ============================================================
+function SuggestionsView({ groupKey }) {
+  const group = D.suggestionGroups[groupKey];
+  const reviews = useMemo(() => {
+    if (groupKey === "paymentOptimizations") {
+      return D.reviews.filter(r => r.category === "payment" || /(payment|refund|transaction|deducted|pending)/i.test(r.text));
+    }
+    if (groupKey === "infrastructureUpgrades") {
+      return D.reviews.filter(r => r.category === "performance" || /(server|crash|down|timeout|freeze|lag|slow)/i.test(r.text));
+    }
+    return D.reviews.filter(r => r.category === "support" || /(support|follow up|resolved|customer service|callback)/i.test(r.text));
+  }, [groupKey]);
+  return (
+    <div>
+      <DashboardHeader icon="ti-bulb" title={group.label} subtitle={`Solution-oriented feedback grouped into actionable categories · ${group.count} suggestions`} />
+      <Card>
+        <SectionTitle icon="ti-bulb">Topic-specific improvement suggestions</SectionTitle>
+        <SentimentSummary reviews={reviews} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+          {reviews.slice(0, 10).map(r => (
+            <div key={r.id} style={{
+              padding: "13px 14px", borderRadius: 11, border: "1px solid var(--border-soft)",
+              background: "#f7fcf6", borderLeft: "3px solid var(--esewa-green)"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700 }}>{r.name}</span>
+                <i className="ti ti-bulb" style={{ fontSize: 13, color: "var(--esewa-green)" }}></i>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.5 }}>{r.text}</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 6 }}>{r.dateLabel} NPT</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// PROBLEM STATEMENT SUB-VIEWS (MPIN / KYC / OTP / Support already built above as full dashboards)
+// ============================================================
+
+// ============================================================
+// APP SHELL
+// ============================================================
+function App() {
+  const [view, setView] = useState("main");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [theme, setTheme] = useState("light");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return D.reviews.filter(r => [r.text, r.category, r.name, r.dateLabel].join(" ").toLowerCase().includes(query));
+  }, [searchQuery]);
+
+  const titles = {
+    main: "Main dashboard",
+    paymentGateway: "Payment gateway monitor",
+    failedTransactions: "Transaction failures",
+    appPerformance: "App performance and bugs",
+    mpin: "MPIN dashboard",
+    kyc: "KYC dashboard",
+    otp: "OTP dashboard",
+    support: "Customer support dashboard",
+    systemFailures: "Review analysis",
+    paymentDropouts: "Review analysis",
+    uiConfusion: "Review analysis",
+    customerCare: "Suggestions engine",
+    paymentOptimizations: "Suggestions engine",
+    infrastructureUpgrades: "Suggestions engine"
+  };
+
+  function renderView() {
+    switch (view) {
+      case "main": return <MainDashboard />;
+      case "paymentGateway": return <PaymentGatewayDashboard />;
+      case "failedTransactions": return <FailedTransactionsDashboard />;
+      case "appPerformance": return <AppPerformanceDashboard />;
+      case "mpin": return <MpinDashboard />;
+      case "kyc": return <KycDashboard />;
+      case "otp": return <OtpDashboard />;
+      case "support": return <SupportDashboard />;
+      case "systemFailures": case "paymentDropouts": case "uiConfusion":
+        return <ReviewAnalysisView groupKey={view} />;
+      case "customerCare": case "paymentOptimizations": case "infrastructureUpgrades":
+        return <SuggestionsView groupKey={view} />;
+      default: return <MainDashboard />;
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar view={view} setView={(v) => { setView(v); setMobileOpen(false); }} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px",
+          background: "var(--esewa-navy)", position: "sticky", top: 0, zIndex: 10
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setMobileOpen(true)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", display: "none" }} className="mobile-menu-btn">
+              <i className="ti ti-menu-2" style={{ fontSize: 22 }}></i>
+            </button>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{titles[view] || "Dashboard"}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "flex-end" }}>
+            <div style={{ position: "relative", maxWidth: 320, width: searchOpen ? "100%" : 0, overflow: "hidden", transition: "width 0.2s ease" }}>
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search reviews, keywords, sections" style={{ width: "100%", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, color: "var(--text-main)", background: "var(--search-bg)" }} />
+            </div>
+            <button onClick={() => { setSearchOpen(s => !s); if (!searchOpen) setSearchQuery(""); }} style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 999, color: "#fff", cursor: "pointer", padding: "8px 10px" }}>
+              <i className="ti ti-search" style={{ fontSize: 15 }}></i>
+            </button>
+            <button onClick={() => setTheme(t => t === "light" ? "dark" : "light")} style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 999, color: "#fff", cursor: "pointer", padding: "8px 10px" }}>
+              <i className={`ti ti-${theme === "light" ? "moon" : "sun"}`} style={{ fontSize: 15 }}></i>
+            </button>
+          </div>
+        </div>
+        {searchOpen && searchQuery && (
+          <Card style={{ margin: "14px 16px 0", padding: 12 }}>
+            <SectionTitle icon="ti-search">Search results</SectionTitle>
+            <div style={{ display: "grid", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+              {searchResults.length ? searchResults.slice(0, 12).map(r => <ReviewCard key={r.id} r={r} />) : <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No results found.</div>}
+            </div>
+          </Card>
+        )}
+        <div style={{ padding: "24px 28px 60px" }} className="main-content-pad">
+          {renderView()}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 900px) {
+          .sidebar-desktop { display: none !important; }
+          .mobile-menu-btn { display: block !important; }
+          .main-content-pad { padding: 16px 14px 40px !important; }
+          .focus-grid { grid-template-columns: 1fr !important; }
+          .responsive-2col { grid-template-columns: 1fr !important; }
+        }
+        @media (min-width: 901px) {
+          .mobile-close { display: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>
